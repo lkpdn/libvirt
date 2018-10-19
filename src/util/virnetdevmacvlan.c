@@ -943,13 +943,19 @@ virNetDevMacVLanCreateWithVPortProfile(const char *ifnameRequested,
             return -1;
         }
         if (rc) {
-            if (isAutoName)
-                goto create_name;
-            virReportSystemError(EEXIST,
-                                 _("Unable to create %s device %s"),
-                                 type, ifnameRequested);
-            virMutexUnlock(&virNetDevMacVLanCreateMutex);
-            return -1;
+            bool isOnline;
+            if (virNetDevGetOnline(ifnameRequested, &isOnline) < 0)
+                return -1;
+            if (isOnline) {
+                virReportSystemError(EEXIST,
+                                     _("Unable to create %s device %s"),
+                                     type, ifnameRequested);
+                return -1;
+            }
+            VIR_INFO("Use existing macvtap device: %s", ifnameRequested);
+            ifnameCreated = ifnameRequested;
+            flags &= ~VIR_NETDEV_MACVLAN_CREATE_WITH_TAP;
+            goto create_name;
         }
         if (isAutoName &&
             (reservedID = virNetDevMacVLanReserveName(ifnameRequested, true)) < 0) {
